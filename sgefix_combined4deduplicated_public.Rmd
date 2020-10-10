@@ -1,0 +1,304 @@
+---
+title: "SGEFix combined4deduplicated"
+author: "Michael Gordon"
+date: "10 Oct 2020"
+output:
+  html_document:
+    toc: yes
+    toc_depth: 4
+    toc_float:
+      collapsed: no
+      smooth_scroll: yes
+    df_print: paged
+    theme: cerulean
+    highlight: tango
+  pdf_document:
+    toc: yes
+    toc_depth: '4'
+---
+
+```{r setup, include=FALSE, eval=TRUE}
+knitr::opts_chunk$set(echo = TRUE, rows.print=25)
+require(tidyverse)
+require("ggbeeswarm")
+require("magrittr")
+require(tidyr)
+require(dplyr)
+library("DESeq2")
+```
+
+Input data was not decontaminated in either way. Alignment with BBmap local minid=85. Raw counts were used for expression matrix.  
+
+Parameters & input data
+```{r}
+lfc_threshold=1
+alpha = 0.005
+#show_examples_on_plots=TRUE # enables plot generation
+num_examples = 20  # how many boxplots print
+#relevel_groups = F
+exec_old = F  # not used yet
+
+path_to_annot <- "../../Cdt/3.Diff_expr/genome_based_85_10/annot_for_genome_based.Robject"
+mercator_categories_colours <- "../../Cdt/3.Diff_expr/genome_based_85_10/mercatorCatsColoursDf_rus.Robject"
+PsT_fix_metadata_path <- '../PsT_fix_metadata.csv'
+path_to_expr_matrix <- '../quantification/transcript_count_matrix_bbmap_combined4deduplicated.txt'
+
+source("helper_functions.R")
+```
+
+This document is generated with LFC cutoff |LFC| > `r lfc_threshold` .  
+False positive rate for  = `r alpha` .   
+
+
+Read metadata and combine genotype with day.    
+  
+```{r}
+sge_fix_metadata <- read.delim(PsT_fix_metadata_path)
+sge_fix_metadata <- unite(sge_fix_metadata, col="group", genotype, time, remove = F)
+# very inconvenient!
+```
+
+Read in expression matrix  
+```{r}
+sge_fix_combined4deduplicated <- read.delim(path_to_expr_matrix)
+```
+
+```{r message=FALSE, warning=FALSE}
+require("magrittr")
+require(tidyr)
+require(dplyr)
+library("DESeq2")
+```
+
+Move IDs to rownames and flush zero rows  
+
+```{r}
+row.names(sge_fix_combined4deduplicated) <- sge_fix_combined4deduplicated$transcr_id
+expr_matrix <- dplyr::select(sge_fix_combined4deduplicated, -transcr_id)
+rowsum <- apply(expr_matrix, 1, sum)
+expr_matrix[rowsum != 0, ] %>% nrow()
+
+expr_matrix <- expr_matrix[rowsum != 0, ]
+```
+
+There are 46529 non-zero rows.  
+
+# Diffexpr with separated coefficients  
+
+```{r}
+dds <- DESeqDataSetFromMatrix(countData = expr_matrix,
+                              colData = sge_fix_metadata,
+                              design = ~genotype+time )
+```
+
+```{r}
+deseq_result <- DESeq(dds)
+```
+
+**Show model coefficients **  
+  
+```{r res names}
+resultsNames(deseq_result)
+```
+
+## Samples assesment
+```{r}
+library("pheatmap")
+```
+
+```{r, fig.width=11, fig.height=9}
+ntd <- normTransform(dds)
+top_genes <- order(rowMeans(counts(deseq_result,normalized=TRUE)),
+                decreasing=TRUE)[1:50]
+heatmap_df <- as.data.frame(colData(deseq_result)[,c("genotype","time")])
+pheatmap(assay(ntd)[top_genes,], cluster_rows=FALSE, show_rownames=FALSE,
+         cluster_cols=TRUE, annotation_col=heatmap_df)
+```
+
+## Diffexpr. results
+
+```{r, rows.print=25}
+res_contrast2 <- results(deseq_result, name="genotype_SGEFix1_vs_SGE",
+                        alpha = alpha, lfcThreshold = lfc_threshold)
+summary(res_contrast2)
+plotMA(res_contrast2)
+#   hist(as.data.frame(res_contrast)) 
+#df_old_cmp_gen <- addAnnotation(res_contrast2)
+#df_old_cmp_gen
+#writeResultsToCsv(res_contrast, filename = "sge_vs_cdt_1d.csv")
+#df_old_cmp_gen$transcriptID %>% sample(15) %>% print_pretty_counts(d = dds_old, deseq_normalized = F)
+```
+
+```{r, rows.print=25}
+res_contrast2 <- results(deseq_result, name="genotype_SGEFix2_vs_SGE",
+                        alpha = alpha, lfcThreshold = lfc_threshold)
+summary(res_contrast2)
+plotMA(res_contrast2)
+#   hist(as.data.frame(res_contrast)) 
+#df_old_cmp_gen <- addAnnotation(res_contrast2)
+#df_old_cmp_gen
+#writeResultsToCsv(res_contrast, filename = "sge_vs_cdt_1d.csv")
+#df_old_cmp_gen$transcriptID %>% sample(15) %>% print_pretty_counts(d = dds_old, deseq_normalized = F)
+```
+
+```{r, rows.print=25}
+res_contrast2 <- results(deseq_result, name="genotype_SGEFix3_vs_SGE",
+                        alpha = alpha, lfcThreshold = lfc_threshold)
+summary(res_contrast2)
+plotMA(res_contrast2)
+#   hist(as.data.frame(res_contrast)) 
+#df_old_cmp_gen <- addAnnotation(res_contrast2)
+#df_old_cmp_gen
+#writeResultsToCsv(res_contrast, filename = "sge_vs_cdt_1d.csv")
+#df_old_cmp_gen$transcriptID %>% sample(15) %>% print_pretty_counts(d = dds_old, deseq_normalized = F)
+```
+
+### How to compare this?  
+
+Lets play with contrasts. But not right now.  
+
+
+
+
+
+# Diffexpr. with grouping variable  
+
+```{r}
+dds_gr <- DESeqDataSetFromMatrix(countData = expr_matrix,
+                              colData = sge_fix_metadata,
+                              design = ~group )
+```
+
+```{r}
+deseq_result_gr <- DESeq(dds_gr)
+```
+
+**Show model coefficients**  
+
+```{r res names grouped}
+resultsNames(deseq_result_gr)
+```
+
+Unlikely this would help. Need to set exact contrasts.  
+  
+  
+## SGEFix1 vs. SGE at 21 day  
+
+Comparison of the blue boxplot with yellow.  
+
+```{r, rows.print=25, warning=F}
+res_tmp2 <- results(deseq_result_gr, contrast=c("group", "SGEFix1_21d", "SGE_21d"),
+                        alpha = alpha, lfcThreshold = lfc_threshold)
+summary(res_tmp2)
+plotMA(res_tmp2)
+df_group_cmp <- addAnnotation(res_tmp2)
+df_group_cmp
+
+readr::write_tsv(df_group_cmp[order(df_group_cmp$padj),], path = "SGEFix1_vs_SGE_at_21_day.tsv")
+```
+
+Some stats & functional categories.  
+```{r}
+print_annot_stats(df_group_cmp)
+mercatorTopCats(df_group_cmp)
+```
+
+#### Graphical examples.  
+```{r}
+print_counts_boxplots(res_tmp2, d=dds_gr, deseq_normalized = F)
+```
+
+
+## SGEFix2 vs. SGE at 21 day  
+
+```{r, rows.print=25, warning=F}
+res_tmp2 <- results(deseq_result_gr, contrast=c("group", "SGEFix2_21d", "SGE_21d"),
+                        alpha = alpha, lfcThreshold = lfc_threshold)
+summary(res_tmp2)
+plotMA(res_tmp2)
+df_group_cmp <- addAnnotation(res_tmp2)
+df_group_cmp
+
+readr::write_tsv(df_group_cmp[order(df_group_cmp$padj),], path = "SGEFix2_vs_SGE_at_21_day.tsv")
+```
+
+
+Some stats & functional categories.  
+```{r}
+print_annot_stats(df_group_cmp)
+mercatorTopCats(df_group_cmp)
+```
+
+#### Graphical examples.  
+```{r}
+print_counts_boxplots(res_tmp2, d=dds_gr, deseq_normalized = F)
+```
+
+
+
+## SGEFix1 vs. SGEFix2 at 21 day  
+
+```{r, rows.print=25, warning=F}
+res_tmp2 <- results(deseq_result_gr, contrast=c("group", "SGEFix1_21d", "SGEFix2_21d"),
+                        alpha = alpha, lfcThreshold = lfc_threshold)
+summary(res_tmp2)
+plotMA(res_tmp2)
+df_group_cmp <- addAnnotation(res_tmp2)
+df_group_cmp
+
+readr::write_tsv(df_group_cmp[order(df_group_cmp$padj),], path = "SGEFix1_vs_SGEFix2_at_21_day.tsv")
+```
+
+Some stats & functional categories.  
+```{r}
+print_annot_stats(df_group_cmp)
+mercatorTopCats(df_group_cmp)
+```
+
+#### Graphical examples.  
+```{r}
+print_counts_boxplots(res_tmp2, d=dds_gr, deseq_normalized = F)
+```
+
+
+## SGEFix3 vs. SGE at 4 weeks    
+
+```{r, rows.print=25, warning=F}
+res_tmp2 <- results(deseq_result_gr, contrast=c("group", "SGEFix3_4w", "SGE_4w"),
+                        alpha = alpha, lfcThreshold = lfc_threshold)
+summary(res_tmp2)
+plotMA(res_tmp2)
+df_group_cmp <- addAnnotation(res_tmp2)
+df_group_cmp
+
+readr::write_tsv(df_group_cmp[order(df_group_cmp$padj),], path = "SGEFix3_vs_SGE_at_4w.tsv")
+```
+
+
+Some stats & functional categories.  
+```{r}
+print_annot_stats(df_group_cmp)
+mercatorTopCats(df_group_cmp)
+```
+
+#### Graphical examples.  
+```{r}
+print_counts_boxplots(res_tmp2, d=dds_gr, deseq_normalized = F)
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
