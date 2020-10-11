@@ -220,22 +220,6 @@ mercatorTopCats(df_group_cmp)
 ```
 
 
-```{r row number discrepancy reason, eval=F, include=F}
-df_a <- addAnnotation(res_tmp2, removeDuplicated = F)
-df_b <- as.data.frame(res_tmp2[!is.na(res_tmp2$padj) & res_tmp2$padj<alpha & abs(res_tmp2$log2FoldChange)>lfc_threshold, ])
-
-nrow(df_a)
-nrow(df_b)
-
-# some rows were lost during join
-df_b$transcriptID <- row.names(df_b)
-dplyr::left_join(x = annot_for_genome_based, y = df_b, by= c("transcriptID"="transcriptID"),  
-                               copy=TRUE) %>% filter(padj<alpha)
-
-df_b[ ! df_b$transcriptID %in% df_a$transcriptID, ]
-```
-
-
 ### LFC > 0  
 
 Some stats & functional categories.  
