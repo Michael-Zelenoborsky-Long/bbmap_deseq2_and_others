@@ -25,6 +25,7 @@ require("magrittr")
 require(tidyr)
 require(dplyr)
 library("DESeq2")
+require("stringr")
 ```
 
 Input data was not decontaminated in either way. Alignment with BBmap local minid=85. Raw counts were used for expression matrix.  
@@ -62,6 +63,23 @@ Read in expression matrix
 ```{r}
 sge_fix_combined4deduplicated <- read.delim(path_to_expr_matrix)
 ```
+
+Get rid of len=... in TRINITY transcripts. 
+This will make IDs identical to IDs in annotation. 
+```{r}
+sge_fix_combined4deduplicated$transcr_id <- stringr::str_replace(string = sge_fix_combined4deduplicated$transcr_id,
+                                                                 pattern = '[:space:]+len=[:digit:]+.*',
+                                                                 replacement = '')
+
+# stringr::str_detect(string = sge_fix_combined4deduplicated$transcr_id, pattern = '[:space:]+len=[:digit:]+.*') %>% sum()
+# 13794 IDs were modified
+
+#sge_fix_combined4deduplicated %>% distinct(transcr_id) %>% nrow()
+# 49637
+# all IDs are unique
+#sge_fix_combined4deduplicated %>% distinct(transcr_id, .keep_all = T) %>% tail()
+```
+
 
 ```{r message=FALSE, warning=FALSE}
 require("magrittr")
@@ -155,9 +173,7 @@ plotMA(res_contrast2)
 
 ### How to compare this?  
 
-Lets play with contrasts. But not right now.  
-
-
+This was a data overview. Further steps are performed using more convenient approach with grouping variable.  
 
 
 
@@ -196,18 +212,58 @@ df_group_cmp
 
 readr::write_tsv(df_group_cmp[order(df_group_cmp$padj),], path = "SGEFix1_vs_SGE_at_21_day.tsv")
 ```
+Stats for both LFC > 0 & LFC < 0  
 
-Some stats & functional categories.  
 ```{r}
 print_annot_stats(df_group_cmp)
 mercatorTopCats(df_group_cmp)
 ```
 
-#### Graphical examples.  
-```{r}
-print_counts_boxplots(res_tmp2, d=dds_gr, deseq_normalized = F)
+
+```{r row number discrepancy reason, eval=F, include=F}
+df_a <- addAnnotation(res_tmp2, removeDuplicated = F)
+df_b <- as.data.frame(res_tmp2[!is.na(res_tmp2$padj) & res_tmp2$padj<alpha & abs(res_tmp2$log2FoldChange)>lfc_threshold, ])
+
+nrow(df_a)
+nrow(df_b)
+
+# some rows were lost during join
+df_b$transcriptID <- row.names(df_b)
+dplyr::left_join(x = annot_for_genome_based, y = df_b, by= c("transcriptID"="transcriptID"),  
+                               copy=TRUE) %>% filter(padj<alpha)
+
+df_b[ ! df_b$transcriptID %in% df_a$transcriptID, ]
 ```
 
+
+### LFC > 0  
+
+Some stats & functional categories.  
+```{r}
+df_group_cmp %>% dplyr::filter(log2FoldChange>0) %>% print_annot_stats()
+df_group_cmp %>% dplyr::filter(log2FoldChange>0) %>% mercatorTopCats()
+df_group_cmp %>% dplyr::filter(log2FoldChange>0)
+```
+
+#### Graphical examples.  
+```{r}
+print_counts_boxplots(res_tmp2[res_tmp2@rownames %in% df_group_cmp$transcriptID 
+                               & res_tmp2$log2FoldChange > lfc_threshold,], d=dds_gr, deseq_normalized = F)
+```
+
+### LFC < 0  
+
+```{r}
+df_group_cmp %>% dplyr::filter(log2FoldChange<0) %>% print_annot_stats()
+df_group_cmp %>% dplyr::filter(log2FoldChange<0) %>% mercatorTopCats()
+df_group_cmp %>% dplyr::filter(log2FoldChange<0)
+```
+
+#### Graphical examples.  
+```{r}
+print_counts_boxplots(res_tmp2[res_tmp2@rownames %in% df_group_cmp$transcriptID 
+                               & res_tmp2$log2FoldChange < lfc_threshold,], d=dds_gr, deseq_normalized = F)
+```
 
 ## SGEFix2 vs. SGE at 21 day  
 
@@ -223,15 +279,40 @@ readr::write_tsv(df_group_cmp[order(df_group_cmp$padj),], path = "SGEFix2_vs_SGE
 ```
 
 
-Some stats & functional categories.  
+Stats for both LFC > 0 & LFC < 0  
+
 ```{r}
 print_annot_stats(df_group_cmp)
 mercatorTopCats(df_group_cmp)
 ```
 
+### LFC > 0  
+
+Some stats & functional categories.  
+```{r}
+df_group_cmp %>% dplyr::filter(log2FoldChange>0) %>% print_annot_stats()
+df_group_cmp %>% dplyr::filter(log2FoldChange>0) %>% mercatorTopCats()
+df_group_cmp %>% dplyr::filter(log2FoldChange>0)
+```
+
 #### Graphical examples.  
 ```{r}
-print_counts_boxplots(res_tmp2, d=dds_gr, deseq_normalized = F)
+print_counts_boxplots(res_tmp2[res_tmp2@rownames %in% df_group_cmp$transcriptID 
+                               & res_tmp2$log2FoldChange > lfc_threshold,], d=dds_gr, deseq_normalized = F)
+```
+
+### LFC < 0  
+
+```{r}
+df_group_cmp %>% dplyr::filter(log2FoldChange<0) %>% print_annot_stats()
+df_group_cmp %>% dplyr::filter(log2FoldChange<0) %>% mercatorTopCats()
+df_group_cmp %>% dplyr::filter(log2FoldChange<0)
+```
+
+#### Graphical examples.  
+```{r}
+print_counts_boxplots(res_tmp2[res_tmp2@rownames %in% df_group_cmp$transcriptID 
+                               & res_tmp2$log2FoldChange < lfc_threshold,], d=dds_gr, deseq_normalized = F)
 ```
 
 
@@ -249,15 +330,40 @@ df_group_cmp
 readr::write_tsv(df_group_cmp[order(df_group_cmp$padj),], path = "SGEFix1_vs_SGEFix2_at_21_day.tsv")
 ```
 
-Some stats & functional categories.  
+Stats for both LFC > 0 & LFC < 0  
+
 ```{r}
 print_annot_stats(df_group_cmp)
 mercatorTopCats(df_group_cmp)
 ```
 
+### LFC > 0  
+
+Some stats & functional categories.  
+```{r}
+df_group_cmp %>% dplyr::filter(log2FoldChange>0) %>% print_annot_stats()
+df_group_cmp %>% dplyr::filter(log2FoldChange>0) %>% mercatorTopCats()
+df_group_cmp %>% dplyr::filter(log2FoldChange>0)
+```
+
 #### Graphical examples.  
 ```{r}
-print_counts_boxplots(res_tmp2, d=dds_gr, deseq_normalized = F)
+print_counts_boxplots(res_tmp2[res_tmp2@rownames %in% df_group_cmp$transcriptID 
+                               & res_tmp2$log2FoldChange > lfc_threshold,], d=dds_gr, deseq_normalized = F)
+```
+
+### LFC < 0  
+
+```{r}
+df_group_cmp %>% dplyr::filter(log2FoldChange<0) %>% print_annot_stats()
+df_group_cmp %>% dplyr::filter(log2FoldChange<0) %>% mercatorTopCats()
+df_group_cmp %>% dplyr::filter(log2FoldChange<0)
+```
+
+#### Graphical examples.  
+```{r}
+print_counts_boxplots(res_tmp2[res_tmp2@rownames %in% df_group_cmp$transcriptID 
+                               & res_tmp2$log2FoldChange < lfc_threshold,], d=dds_gr, deseq_normalized = F)
 ```
 
 
@@ -275,15 +381,40 @@ readr::write_tsv(df_group_cmp[order(df_group_cmp$padj),], path = "SGEFix3_vs_SGE
 ```
 
 
-Some stats & functional categories.  
+Stats for both LFC > 0 & LFC < 0  
+
 ```{r}
 print_annot_stats(df_group_cmp)
 mercatorTopCats(df_group_cmp)
 ```
 
+### LFC > 0  
+
+Some stats & functional categories.  
+```{r}
+df_group_cmp %>% dplyr::filter(log2FoldChange>0) %>% print_annot_stats()
+df_group_cmp %>% dplyr::filter(log2FoldChange>0) %>% mercatorTopCats()
+df_group_cmp %>% dplyr::filter(log2FoldChange>0)
+```
+
 #### Graphical examples.  
 ```{r}
-print_counts_boxplots(res_tmp2, d=dds_gr, deseq_normalized = F)
+print_counts_boxplots(res_tmp2[res_tmp2@rownames %in% df_group_cmp$transcriptID 
+                               & res_tmp2$log2FoldChange > lfc_threshold,], d=dds_gr, deseq_normalized = F)
+```
+
+### LFC < 0  
+
+```{r}
+df_group_cmp %>% dplyr::filter(log2FoldChange<0) %>% print_annot_stats()
+df_group_cmp %>% dplyr::filter(log2FoldChange<0) %>% mercatorTopCats()
+df_group_cmp %>% dplyr::filter(log2FoldChange<0)
+```
+
+#### Graphical examples.  
+```{r}
+print_counts_boxplots(res_tmp2[res_tmp2@rownames %in% df_group_cmp$transcriptID 
+                               & res_tmp2$log2FoldChange < lfc_threshold,], d=dds_gr, deseq_normalized = F)
 ```
 
 
